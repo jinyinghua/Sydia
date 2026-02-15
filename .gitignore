@@ -17,3 +17,6 @@ local.properties
 /Overview.md
 .clinerules/
 .clinerules
+.agent/rules/
+.agent/
+
