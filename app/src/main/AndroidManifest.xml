@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
+        android:name=".SydiaApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -22,20 +23,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".SydiaService"
+            android:label="我的具身智能Agent"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/assistant_config" />
+        </service>
+
+        <service
+            android:name=".SydiaSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
     </application>
-    <service
-        android:name=".SydiaService"
-        android:label="我的具身智能Agent"
-        android:permission="android.permission.BIND_ASSISTANT"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="android.service.voice.VoiceInteractionService" />
-            <action android:name="android.service.assistant.AssistantService" />
-        </intent-filter>
-        <meta-data
-            android:name="android.voice_interaction"
-            android:resource="@xml/assistant_config" />
-    </service>
 
 </manifest>
 
