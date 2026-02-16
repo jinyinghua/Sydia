@@ -80,6 +80,8 @@ class SydiaSession(context: Context) :
         val app = context.applicationContext as SydiaApplication
         val chatRepo   = app.chatRepository
         val memoryRepo = app.memoryRepository
+        val settingsRepo = app.settingsRepository
+        val aiService = app.aiService
 
         val composeView = ComposeView(context).apply {
             setViewTreeLifecycleOwner(this@SydiaSession)
@@ -113,7 +115,7 @@ class SydiaSession(context: Context) :
                             shadowElevation = 16.dp
                         ) {
                             val vm: ChatViewModel = viewModel(
-                                factory = ChatViewModelFactory(chatRepo, memoryRepo)
+                                factory = ChatViewModelFactory(chatRepo, memoryRepo, settingsRepo, aiService)
                             )
                             ChatScreen(
                                 viewModel = vm,

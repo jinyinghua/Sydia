@@ -28,10 +28,15 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val viewModel: ChatViewModel = viewModel(
-                        factory = ChatViewModelFactory(chatRepository, app.memoryRepository)
+                    val chatViewModel: ChatViewModel = viewModel(
+                        factory = ChatViewModelFactory(
+                            app.chatRepository, 
+                            app.memoryRepository, 
+                            app.settingsRepository, 
+                            app.aiService
+                        )
                     )
-                    SydiaNavHost(viewModel = viewModel)
+                    SydiaNavHost(chatViewModel = chatViewModel, app = app)
                 }
             }
         }

@@ -26,7 +26,7 @@
 
         <service
             android:name=".SydiaService"
-            android:label="我的具身智能Agent"
+            android:label="Sydia"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
             <intent-filter>

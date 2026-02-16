@@ -14,10 +14,16 @@ import com.shaun.sydia.data.local.MemoryEntity
 import com.shaun.sydia.data.repository.MemoryRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import com.shaun.sydia.data.remote.AIService
+import com.shaun.sydia.data.remote.ChatMessage
+import com.shaun.sydia.data.repository.SettingsRepository
+import kotlinx.coroutines.flow.first
 
 class ChatViewModel(
     private val chatRepository: ChatRepository,
-    private val memoryRepository: MemoryRepository
+    private val memoryRepository: MemoryRepository,
+    private val settingsRepository: SettingsRepository,
+    private val aiService: AIService
 ) : ViewModel() {
 
     val chatStream: Flow<PagingData<ChatHistoryEntity>> = chatRepository.getChatStream()
@@ -31,24 +37,44 @@ class ChatViewModel(
             // User message
             chatRepository.sendMessage(text, "user")
             
-            // TODO: Call LLM and get response. For demo, we simulate a response.
-            // In real app, this would be an async call to cloud or local LLM.
-            simulateResponse()
+            try {
+                // Get Settings
+                val provider = settingsRepository.chatModelProvider.first()
+                val model = settingsRepository.chatModelName.first()
+                val apiKey = settingsRepository.chatApiKey.first()
+                val baseUrl = settingsRepository.chatBaseUrl.first()
+                val personality = settingsRepository.personality.first()
+
+                // TODO: FETCH PERSISTED MEMORIES AND INJECT INTO SYSTEM PROMPT
+                val systemPrompt = "You are Sydia, a digital assistant. Your personality is $personality. "
+                
+                // Get context messages (last N)
+                // For now, let's just use the current message as a simple implementation
+                // Real implementation would pull from DB
+                val messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", text)
+                )
+
+                val response = aiService.getChatResponse(provider, model, apiKey, baseUrl, messages)
+                chatRepository.sendMessage(response, "assistant")
+                
+                // Trigger background memory worker if needed
+                handleMemoryFormation(text, response)
+            } catch (e: Exception) {
+                chatRepository.sendMessage("Error: ${e.message}", "system")
+            }
         }
     }
     
-    private suspend fun simulateResponse() {
-        // Simulate thinking delay
-        kotlinx.coroutines.delay(1000)
-        chatRepository.sendMessage("I received your message. This is a demo response.", "assistant")
-        
-        // Simulate memory formation occasionally
-        if (System.currentTimeMillis() % 3 == 0L) { // Random-ish condition
-            memoryRepository.addMemory(
-                body = "User sent a message at ${System.currentTimeMillis()}",
-                weight = 0.5f,
-                category = "Interaction"
-            )
+    private suspend fun handleMemoryFormation(userMsg: String, aiResponse: String) {
+        // Logic for Async Worker as per overview.md
+        // In this "real" version, we check the frequency
+        val freq = settingsRepository.extractionFrequency.first()
+        // Simple logic: if message length > 20 or randomly
+        if (userMsg.length > 20) {
+             // In a real app, this would be a WorkManager task calling Cloud API for embedding
+             // memoryRepository.addMemory(...) 
         }
     }
 
@@ -60,10 +86,6 @@ class ChatViewModel(
 
     fun resetContext() {
         viewModelScope.launch {
-             // Mark the current end as reset point or just insert a system message?
-             // Overview says: Reset button inserts logical break.
-             // We'll insert a special message or handle it in logic.
-             // For now, let's just insert a system message saying "Context Reset"
              chatRepository.sendMessage("--- Context Reset ---", "system")
         }
     }
@@ -71,12 +93,14 @@ class ChatViewModel(
 
 class ChatViewModelFactory(
     private val chatRepository: ChatRepository,
-    private val memoryRepository: MemoryRepository
+    private val memoryRepository: MemoryRepository,
+    private val settingsRepository: SettingsRepository,
+    private val aiService: AIService
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(chatRepository, memoryRepository) as T
+            return ChatViewModel(chatRepository, memoryRepository, settingsRepository, aiService) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
