@@ -24,6 +24,10 @@ class ChatRepository(private val chatHistoryDao: ChatHistoryDao) {
         chatHistoryDao.insertMessage(message)
     }
 
+    suspend fun getRecentMessages(limit: Int): List<ChatHistoryEntity> {
+        return chatHistoryDao.getRecentMessages(limit)
+    }
+
     suspend fun clearHistory() {
         chatHistoryDao.clearHistory()
     }

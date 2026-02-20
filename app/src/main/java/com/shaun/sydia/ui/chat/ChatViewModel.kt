@@ -6,75 +6,85 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.shaun.sydia.data.local.ChatHistoryEntity
-import com.shaun.sydia.data.repository.ChatRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
-
-import com.shaun.sydia.data.local.MemoryEntity
-import com.shaun.sydia.data.repository.MemoryRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
+import com.shaun.sydia.data.remote.AIConfig
 import com.shaun.sydia.data.remote.AIService
 import com.shaun.sydia.data.remote.ChatMessage
+import com.shaun.sydia.data.repository.ChatRepository
+import com.shaun.sydia.data.repository.MemoryRepository
 import com.shaun.sydia.data.repository.SettingsRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class ChatViewModel(
-    private val chatRepository: ChatRepository,
-    private val memoryRepository: MemoryRepository,
-    private val settingsRepository: SettingsRepository,
-    private val aiService: AIService
+        private val chatRepository: ChatRepository,
+        private val memoryRepository: MemoryRepository,
+        private val settingsRepository: SettingsRepository,
+        private val aiService: AIService
 ) : ViewModel() {
 
-    val chatStream: Flow<PagingData<ChatHistoryEntity>> = chatRepository.getChatStream()
-        .cachedIn(viewModelScope)
+    val chatStream: Flow<PagingData<ChatHistoryEntity>> =
+            chatRepository.getChatStream().cachedIn(viewModelScope)
 
-    val memories = memoryRepository.allMemories
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val memories =
+            memoryRepository.allMemories.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun sendMessage(text: String) {
         viewModelScope.launch {
-            // User message
+            // 1. 保存用户消息到本地数据库
             chatRepository.sendMessage(text, "user")
-            
+
             try {
-                // Get Settings
+                // 2. 获取统一配置
                 val provider = settingsRepository.chatModelProvider.first()
                 val model = settingsRepository.chatModelName.first()
                 val apiKey = settingsRepository.chatApiKey.first()
                 val baseUrl = settingsRepository.chatBaseUrl.first()
-                val personality = settingsRepository.personality.first()
+                val contextLimit = settingsRepository.contextLength.first()
 
-                // TODO: FETCH PERSISTED MEMORIES AND INJECT INTO SYSTEM PROMPT
-                val systemPrompt = "You are Sydia, a digital assistant. Your personality is $personality. "
+                // 3. 构建 System Prompt (包含记忆)
+                val memoryList = memoryRepository.allMemories.first()
+                val memoryContext = if (memoryList.isNotEmpty()) {
+                    "\nRelevant memories:\n" + memoryList.joinToString("\n") { "- ${it.body}" }
+                } else ""
                 
-                // Get context messages (last N)
-                // For now, let's just use the current message as a simple implementation
-                // Real implementation would pull from DB
-                val messages = listOf(
-                    ChatMessage("system", systemPrompt),
-                    ChatMessage("user", text)
-                )
+                val systemPrompt = "You are Sydia, a digital assistant. $memoryContext"
 
-                val response = aiService.getChatResponse(provider, model, apiKey, baseUrl, messages)
+                // 4. 获取上下文消息（最后 N 轮）
+                val recentMessages = chatRepository.getRecentMessages(contextLimit)
+                    .reversed() // 数据库是 DESC，需要反转回时间正序
+                    .map { ChatMessage(it.role, it.content) }
+
+                val messages = mutableListOf<ChatMessage>()
+                messages.add(ChatMessage("system", systemPrompt))
+                messages.addAll(recentMessages)
+
+                // 5. 调用云端 API
+                val config = AIConfig(provider, model, apiKey, baseUrl)
+                val response = aiService.getChatResponse(config, messages)
+
+                // 6. 保存 AI 回复到本地数据库
                 chatRepository.sendMessage(response, "assistant")
+
+                // 7. 触发背景记忆形成
                 
-                // Trigger background memory worker if needed
                 handleMemoryFormation(text, response)
             } catch (e: Exception) {
                 chatRepository.sendMessage("Error: ${e.message}", "system")
             }
         }
     }
-    
+
     private suspend fun handleMemoryFormation(userMsg: String, aiResponse: String) {
-        // Logic for Async Worker as per overview.md
-        // In this "real" version, we check the frequency
+        // TODO：逻辑与 overview.md 中一致
+        // 检查提取频率
         val freq = settingsRepository.extractionFrequency.first()
-        // Simple logic: if message length > 20 or randomly
+        // 简单逻辑：如果消息长度 > 20 或随机
         if (userMsg.length > 20) {
-             // In a real app, this would be a WorkManager task calling Cloud API for embedding
-             // memoryRepository.addMemory(...) 
+            // TODO：实际实现将调用云端 API 进行嵌入
+            // memoryRepository.addMemory(...)
         }
     }
 
@@ -85,22 +95,21 @@ class ChatViewModel(
     }
 
     fun resetContext() {
-        viewModelScope.launch {
-             chatRepository.sendMessage("--- Context Reset ---", "system")
-        }
+        viewModelScope.launch { chatRepository.sendMessage("--- Context Reset ---", "system") }
     }
 }
 
 class ChatViewModelFactory(
-    private val chatRepository: ChatRepository,
-    private val memoryRepository: MemoryRepository,
-    private val settingsRepository: SettingsRepository,
-    private val aiService: AIService
+        private val chatRepository: ChatRepository,
+        private val memoryRepository: MemoryRepository,
+        private val settingsRepository: SettingsRepository,
+        private val aiService: AIService
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(chatRepository, memoryRepository, settingsRepository, aiService) as T
+            return ChatViewModel(chatRepository, memoryRepository, settingsRepository, aiService) as
+                    T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -13,6 +13,9 @@ interface ChatHistoryDao {
     @Query("SELECT * FROM chat_history ORDER BY timestamp DESC")
     fun getAllMessages(): PagingSource<Int, ChatHistoryEntity>
 
+    @Query("SELECT * FROM chat_history ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentMessages(limit: Int): List<ChatHistoryEntity>
+
     @Query("DELETE FROM chat_history")
     suspend fun clearHistory()
 }

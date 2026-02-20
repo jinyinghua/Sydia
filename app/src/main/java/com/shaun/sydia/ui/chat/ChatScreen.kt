@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material3.*
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.shaun.sydia.data.local.ChatHistoryEntity
+import androidx.compose.ui.text.input.TextFieldValue
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,8 +33,8 @@ fun ChatScreen(
     onClose: () -> Unit = {}
 ) {
     val chatMessages = viewModel.chatStream.collectAsLazyPagingItems()
-    var inputText by remember { mutableStateOf("") }
-    var isPerceptionEnabled by remember { mutableStateOf(false) } // State for perception switch
+    var inputText by remember { mutableStateOf(TextFieldValue("")) }
+    var isPerceptionEnabled by remember { mutableStateOf(false) } // 感知开关的状态
     
     Scaffold(
         containerColor = if (isAssistantInterface) Color.Transparent else MaterialTheme.colorScheme.background,
@@ -49,7 +51,7 @@ fun ChatScreen(
                                     modifier = Modifier.scale(0.7f)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Perception", style = MaterialTheme.typography.labelSmall)
+                                Text("屏幕感知", style = MaterialTheme.typography.labelSmall)
                              }
                         }
                     }
@@ -88,13 +90,17 @@ fun ChatScreen(
                     value = inputText,
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text(if (isAssistantInterface && isPerceptionEnabled) "Sydia is watching..." else "Type a message...") }
+                    placeholder = { Text("发条消息给 Sydia") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
-                    if (inputText.isNotBlank()) {
-                        viewModel.sendMessage(inputText)
-                        inputText = ""
+                    if (inputText.text.isNotBlank()) {
+                        viewModel.sendMessage(inputText.text)
+                        inputText = TextFieldValue("")
                     }
                 }) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
@@ -105,7 +111,7 @@ fun ChatScreen(
         Box(modifier = Modifier.padding(innerPadding)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                reverseLayout = true // Chat usually starts from bottom
+                reverseLayout = true // 最新消息在底部
             ) {
                 items(
                     count = chatMessages.itemCount,

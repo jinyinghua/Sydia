@@ -16,6 +16,7 @@ class SettingsRepository(private val context: Context) {
         val CHAT_MODEL_NAME = stringPreferencesKey("chat_model_name")
         val CHAT_API_KEY = stringPreferencesKey("chat_api_key")
         val CHAT_BASE_URL = stringPreferencesKey("chat_base_url")
+        val CHAT_STREAM_ENABLED = booleanPreferencesKey("chat_stream_enabled")
 
         val EMBEDDING_MODEL_PROVIDER = stringPreferencesKey("embedding_model_provider")
         val EMBEDDING_MODEL_NAME = stringPreferencesKey("embedding_model_name")
@@ -31,6 +32,7 @@ class SettingsRepository(private val context: Context) {
     val chatModelName: Flow<String> = context.dataStore.data.map { it[CHAT_MODEL_NAME] ?: "gpt-3.5-turbo" }
     val chatApiKey: Flow<String> = context.dataStore.data.map { it[CHAT_API_KEY] ?: "" }
     val chatBaseUrl: Flow<String> = context.dataStore.data.map { it[CHAT_BASE_URL] ?: "https://api.openai.com/v1/" }
+    val chatStreamEnabled: Flow<Boolean> = context.dataStore.data.map { it[CHAT_STREAM_ENABLED] ?: false }
 
     val embeddingModelProvider: Flow<String> = context.dataStore.data.map { it[EMBEDDING_MODEL_PROVIDER] ?: "OpenAI" }
     val embeddingModelName: Flow<String> = context.dataStore.data.map { it[EMBEDDING_MODEL_NAME] ?: "text-embedding-3-small" }
@@ -48,6 +50,10 @@ class SettingsRepository(private val context: Context) {
             it[CHAT_API_KEY] = apiKey
             it[CHAT_BASE_URL] = baseUrl
         }
+    }
+
+    suspend fun updateChatStreamEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[CHAT_STREAM_ENABLED] = enabled }
     }
 
     suspend fun updateEmbeddingSettings(provider: String, model: String, apiKey: String, baseUrl: String) {

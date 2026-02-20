@@ -18,6 +18,8 @@ class SettingsViewModel(private val settingsRepository: SettingsRepository) : Vi
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val chatBaseUrl = settingsRepository.chatBaseUrl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "https://api.openai.com/v1/")
+    val chatStreamEnabled = settingsRepository.chatStreamEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val embeddingModelProvider = settingsRepository.embeddingModelProvider
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "OpenAI")
@@ -38,6 +40,12 @@ class SettingsViewModel(private val settingsRepository: SettingsRepository) : Vi
     fun updateChatSettings(provider: String, model: String, apiKey: String, baseUrl: String) {
         viewModelScope.launch {
             settingsRepository.updateChatSettings(provider, model, apiKey, baseUrl)
+        }
+    }
+
+    fun updateChatStreamEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateChatStreamEnabled(enabled)
         }
     }
 
