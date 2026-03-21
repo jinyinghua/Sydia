@@ -1,0 +1,149 @@
+:root {
+    /* 严格应用你提供的色值 */
+    --background: #181212;
+    --error: #ffb4ab;
+    --errorContainer: #93000a;
+    --inverseOnSurface: #362f2e;
+    --inversePrimary: #994442;
+    --inverseSurface: #ece0df;
+    --onBackground: #ece0df;
+    --onError: #690005;
+    --onErrorContainer: #ffdad6;
+    --onPrimary: #5d1718;
+    --onPrimaryContainer: #ffdad7;
+    --onSecondary: #432a29;
+    --onSecondaryContainer: #ffdad7;
+    --onSurface: #ece0df;
+    --onSurfaceVariant: #cfc4c3;
+    --onTertiary: #402d08;
+    --onTertiaryContainer: #fedeab;
+    --outline: #988e8e;
+    --outlineVariant: #594847;
+    --primary: #ffb3af;
+    --primaryContainer: #7b2d2d;
+    --scrim: #000000;
+    --secondary: #e4bdbb;
+    --secondaryContainer: #5c403e;
+    --surface: #181212;
+    --surfaceTint: #ffb3af;
+    --surfaceVariant: #4c4545;
+    --tertiary: #e1c291;
+    --tertiaryContainer: #58431d;
+    --surfaceBright: #3f3837;
+    --surfaceDim: #181212;
+    --surfaceContainer: #241e1e;
+    --surfaceContainerHigh: #2f2828;
+    --surfaceContainerHighest: #3a3333;
+    --surfaceContainerLow: #201a1a;
+    --surfaceContainerLowest: #120d0d;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--background);
+    color: var(--onSurface);
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* 顶部时间栏 */
+#header {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surfaceContainerHigh);
+    color: var(--primary);
+    font-size: 1.2rem;
+    border-bottom: 1px solid var(--outlineVariant);
+}
+
+/* 主体三栏布局 (对应图1) */
+#main-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧：Ask AI 与 Raw Response */
+#left-panel {
+    width: 25%;
+    border-right: 1px solid var(--outlineVariant);
+    display: flex;
+    flex-direction: column;
+    background: var(--surfaceContainerLow);
+}
+.chat-box { flex: 1; overflow-y: auto; padding: 10px; }
+.ai-msg { color: var(--primary); margin-bottom: 10px; }
+.user-msg { color: var(--onSurface); margin-bottom: 10px; text-align: right; }
+.raw-msg { color: var(--onSurfaceVariant); font-size: 0.8em; margin-bottom: 10px; }
+
+/* 底部 Ask AI 输入框 */
+#ask-ai-bar {
+    display: flex;
+    padding: 10px;
+    background: var(--surfaceContainerHighest);
+}
+#ask-input { flex: 1; background: var(--surface); color: var(--onSurface); border: 1px solid var(--outline); padding: 8px; border-radius: 4px; }
+#ask-btn { background: var(--primaryContainer); color: var(--onPrimaryContainer); border: none; padding: 8px 15px; margin-left: 5px; cursor: pointer; border-radius: 4px; }
+
+/* 中间：Viewer (Web/File Show) */
+#center-panel {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--surfaceContainer);
+    padding: 10px;
+}
+#viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; border: 1px solid var(--outlineVariant); }
+
+/* 右侧：Task Pool (任务池) */
+#right-panel {
+    width: 20%;
+    border-left: 1px solid var(--outlineVariant);
+    background: var(--surfaceContainerLow);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+.task-item {
+    background: var(--surfaceVariant);
+    color: var(--onSurfaceVariant);
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+/* 当前进行中的任务高亮 */
+.task-item.active {
+    background: var(--primaryContainer);
+    color: var(--onPrimaryContainer);
+    border: 1px solid var(--primary);
+    box-shadow: 0 0 10px rgba(255, 179, 175, 0.2);
+}
+
+/* 毛玻璃添加任务弹窗 (对应图1右侧 Blur 区域) */
+#blur-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    backdrop-filter: blur(10px); /* 核心模糊效果 */
+    background: rgba(24, 18, 18, 0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: var(--surfaceContainerHigh);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--outline);
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+}
+.modal-content textarea { background: var(--surface); color: var(--onSurface); height: 100px; margin-bottom: 10px; border: 1px solid var(--outline); padding: 8px; border-radius: 4px; }

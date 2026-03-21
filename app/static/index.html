@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sydia Web Control</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="header">
+        <div id="api-key-container" style="display: flex; align-items: center; gap: 10px;">
+            <label for="api-key-input" style="font-size: 12px; color: var(--onSurfaceVariant);">API Key:</label>
+            <input type="password" id="api-key-input" placeholder="Enter API Key..." style="background: var(--surfaceVariant); border: 1px solid var(--outline); border-radius: 4px; padding: 2px 8px; color: var(--onSurface); font-size: 12px; width: 120px;" />
+        </div>
+        <div>Time: <span id="clock">--:--:--</span></div>
+    </div>
+    
+    <div id="main-container">
+        <!-- 左侧 -->
+        <div id="left-panel">
+            <div class="chat-box" id="chat-history"></div>
+            <div id="ask-ai-bar">
+                <input type="text" id="ask-input" placeholder="Ask AI / Upload File..." />
+                <button id="ask-btn">Send</button>
+            </div>
+        </div>
+        
+        <!-- 中间 -->
+        <div id="center-panel">
+            <img id="viewer-img" src="" alt="Web Viewer (Wait for first screenshot...)" />
+        </div>
+        
+        <!-- 右侧 -->
+        <div id="right-panel">
+            <button onclick="document.getElementById('blur-modal').style.display='flex'" style="margin-bottom: 10px; padding: 10px; background: var(--primary); color: var(--onPrimary); border:none; border-radius: 6px; cursor: pointer; font-weight: bold;">+ 新增任务 (Click)</button>
+            <div id="task-pool">
+                <!-- 任务列表在此渲染，ing_task 会加上 .active -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Blur 弹窗 -->
+    <div id="blur-modal">
+        <div class="modal-content">
+            <h3 style="color:var(--primary); margin-top:0;">Type Task / Upload</h3>
+            <textarea id="modal-text" placeholder="描述你的任务..."></textarea>
+            <input type="file" id="modal-file" style="margin-bottom:10px; color:var(--onSurface);" />
+            <div style="display: flex; gap: 10px;">
+                <button id="submit-task-btn" style="flex: 1; background:var(--primary); color:var(--onPrimary); padding:8px; border:none; border-radius:4px; cursor: pointer;">提交</button>
+                <button onclick="document.getElementById('blur-modal').style.display='none'" style="flex: 1; background:var(--surfaceVariant); color:var(--onSurface); padding:8px; border:none; border-radius:4px; cursor: pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
