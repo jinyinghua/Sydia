@@ -1,31 +1,61 @@
 import asyncio
+import os
 from app.state import state
-import base64
+
+# 浏览器用户数据目录，挂载持久卷后 Cookie/Session 重启不丢
+DATA_DIR = os.getenv("DATA_DIR", "/app/data")
+BROWSER_SESSION_DIR = os.path.join(DATA_DIR, "browser_session")
+
 
 async def run_playwright_loop():
     """
-    执行脑核心循环：监控任务池并执行任务
+    执行脑核心循环：
+    1. 使用 persistent_context 保持登录态
+    2. 不断轮询任务池，逐条执行
     """
-    print("Execution Agent started...")
-    while True:
-        if state.task_queue and state.status == "idle":
-            # 获取新任务
-            task = state.task_queue.pop(0)
-            state.current_task = task
-            state.status = "running"
-            print(f"Executing task: {task}")
+    from playwright.async_api import async_playwright
 
-            try:
-                # 这里模拟 Playwright 操作
-                # 在实际实现中，这里会调用 Playwright 进行截图、分析页面、点击等
-                await asyncio.sleep(5) # 模拟耗时操作
-                
-                # 模拟任务完成
-                state.status = "idle"
-                state.current_task = None
-                print(f"Task completed: {task}")
-            except Exception as e:
-                print(f"Error executing task: {e}")
-                state.status = "error"
-        
-        await asyncio.sleep(1) # 轮询间隔
+    os.makedirs(BROWSER_SESSION_DIR, exist_ok=True)
+    print(f"[Execution] Browser session dir: {BROWSER_SESSION_DIR}")
+
+    async with async_playwright() as pw:
+        # ---- 关键：持久化浏览器上下文 ----
+        context = await pw.chromium.launch_persistent_context(
+            user_data_dir=BROWSER_SESSION_DIR,
+            headless=True,
+            viewport={"width": 1280, "height": 720},
+            locale="zh-CN",
+        )
+        page = context.pages[0] if context.pages else await context.new_page()
+        print("[Execution] Browser ready, entering main loop...")
+
+        while True:
+            if state.task_queue and state.status == "idle":
+                task = state.pop_task()
+                state.set_current(task)
+                state.set_status("running")
+                print(f"[Execution] ▶ Start task: {task}")
+
+                try:
+                    # ---------- 任务执行占位逻辑 ----------
+                    # 实际部署时替换为多模态截图 + LLM 决策循环
+                    await page.goto("https://www.bing.com", timeout=15000)
+                    await asyncio.sleep(3)
+
+                    # 截图存入 state，供前端 Viewer 展示
+                    screenshot_bytes = await page.screenshot()
+                    import base64
+                    state.last_screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+
+                    # 标记完成
+                    state.set_status("idle")
+                    state.set_current(None)
+                    state.add_history(f"✅ 任务完成: {task}")
+                    print(f"[Execution] ✅ Done: {task}")
+
+                except Exception as e:
+                    state.set_status("error")
+                    state.add_history(f"❌ 任务出错: {task} | {str(e)}")
+                    print(f"[Execution] ❌ Error: {e}")
+
+            await asyncio.sleep(1)
