@@ -1,7 +1,6 @@
 fastapi
 uvicorn
 playwright
-openai
 pydantic
-python-dotenv
+httpx
 aiofiles

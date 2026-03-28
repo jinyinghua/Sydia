@@ -1,10 +1,14 @@
 import json
 import os
+import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
 DATA_DIR = os.getenv("DATA_DIR", "/app/data")
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
+
+# 异步锁，保护并发读写
+_lock = asyncio.Lock()
 
 
 class State(BaseModel):

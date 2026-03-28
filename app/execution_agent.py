@@ -30,7 +30,8 @@ async def run_playwright_loop():
         print("[Execution] Browser ready, entering main loop...")
 
         while True:
-            if state.task_queue and state.status == "idle":
+            # 修复：同时检查 idle 和 error 状态，error 后自动恢复继续消费任务
+            if state.task_queue and state.status in ("idle", "error"):
                 task = state.pop_task()
                 state.set_current(task)
                 state.set_status("running")
@@ -54,7 +55,8 @@ async def run_playwright_loop():
                     print(f"[Execution] ✅ Done: {task}")
 
                 except Exception as e:
-                    state.set_status("error")
+                    state.set_status("idle")  # 修复：出错后恢复为 idle，继续消费后续任务
+                    state.set_current(None)
                     state.add_history(f"❌ 任务出错: {task} | {str(e)}")
                     print(f"[Execution] ❌ Error: {e}")
 

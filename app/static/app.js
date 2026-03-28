@@ -1,3 +1,4 @@
+// ===== 时钟 =====
 function updateClock() {
     const now = new Date();
     document.getElementById('clock').innerText = now.toLocaleTimeString();
@@ -5,30 +6,42 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// ===== 获取 API Key =====
+function getApiKey() {
+    return document.getElementById('api-key-input').value;
+}
+
+// ===== 轮询系统状态 =====
 async function fetchState() {
-    const apiKey = document.getElementById('api-key-input').value;
     try {
         const response = await fetch('/v1/state', {
-            headers: { 'X-API-Key': apiKey }
+            headers: { 'X-API-Key': getApiKey() }
         });
         const data = await response.json();
         
         // 更新任务池
         const taskPool = document.getElementById('task-pool');
         taskPool.innerHTML = '';
+
+        // 修复：先显示当前正在执行的任务（带 active 高亮）
+        if (data.current_task) {
+            const activeDiv = document.createElement('div');
+            activeDiv.className = 'task-item active';
+            activeDiv.innerText = '▶ ' + data.current_task;
+            taskPool.appendChild(activeDiv);
+        }
+
+        // 再显示队列中排队的任务
         data.task_queue.forEach(task => {
             const div = document.createElement('div');
             div.className = 'task-item';
-            if (task === data.current_task) {
-                div.classList.add('active');
-            }
             div.innerText = task;
             taskPool.appendChild(div);
         });
 
         // 更新截图
         if (data.screenshot) {
-            document.getElementById('viewer-img').src = `data:image/jpeg;base64,${data.screenshot}`;
+            document.getElementById('viewer-img').src = `data:image/png;base64,${data.screenshot}`;
         }
     } catch (error) {
         console.error('Error fetching state:', error);
@@ -37,13 +50,13 @@ async function fetchState() {
 
 setInterval(fetchState, 2000);
 
-document.getElementById('ask-btn').addEventListener('click', async () => {
+// ===== 发送聊天消息 =====
+async function sendChat() {
     const input = document.getElementById('ask-input');
-    const apiKey = document.getElementById('api-key-input').value;
-    const message = input.value;
+    const message = input.value.trim();
     if (!message) return;
 
-    appendMessage('User', message, 'ai-msg');
+    appendMessage('User', message, 'user-msg');  // 修复：使用 user-msg 类
     input.value = '';
 
     try {
@@ -51,20 +64,35 @@ document.getElementById('ask-btn').addEventListener('click', async () => {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'X-API-Key': apiKey
+                'X-API-Key': getApiKey()
             },
             body: JSON.stringify({ message })
         });
         const data = await response.json();
         appendMessage('AI', data.reply, 'ai-msg');
-        if (data.raw) {
+        if (data.raw && data.raw !== data.reply) {
             appendMessage('Raw', data.raw, 'raw-msg');
         }
+        // 发送后立即刷新状态
+        fetchState();
     } catch (error) {
+        appendMessage('Error', error.message, 'raw-msg');
         console.error('Error chatting:', error);
+    }
+}
+
+// 点击 Send 按钮
+document.getElementById('ask-btn').addEventListener('click', sendChat);
+
+// 修复：监听 Enter 键发送消息
+document.getElementById('ask-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
     }
 });
 
+// ===== 聊天消息渲染 =====
 function appendMessage(sender, text, className) {
     const chatHistory = document.getElementById('chat-history');
     const div = document.createElement('div');
@@ -74,9 +102,9 @@ function appendMessage(sender, text, className) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+// ===== 弹窗提交任务 =====
 async function submitTask() {
-    const text = document.getElementById('modal-text').value;
-    const apiKey = document.getElementById('api-key-input').value;
+    const text = document.getElementById('modal-text').value.trim();
     if (!text) return;
 
     try {
@@ -84,7 +112,7 @@ async function submitTask() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'X-API-Key': apiKey
+                'X-API-Key': getApiKey()
             },
             body: JSON.stringify({ message: `Add task: ${text}` })
         });
@@ -95,3 +123,14 @@ async function submitTask() {
         console.error('Error adding task:', error);
     }
 }
+
+// 修复：绑定提交按钮点击事件
+document.getElementById('submit-task-btn').addEventListener('click', submitTask);
+
+// 弹窗中 textarea 也支持 Ctrl+Enter 提交
+document.getElementById('modal-text').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        submitTask();
+    }
+});
