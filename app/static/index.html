@@ -3,55 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sydia Web Control</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Sydia</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div id="header">
-        <div id="api-key-container" style="display: flex; align-items: center; gap: 10px;">
-            <label for="api-key-input" style="font-size: 12px; color: var(--onSurfaceVariant);">API Key:</label>
-            <input type="password" id="api-key-input" placeholder="Enter API Key..." style="background: var(--surfaceVariant); border: 1px solid var(--outline); border-radius: 4px; padding: 2px 8px; color: var(--onSurface); font-size: 12px; width: 120px;" />
+    <!-- ═══ 顶部状态栏 ═══ -->
+    <header id="topbar">
+        <div class="topbar-left">
+            <span class="logo">◉ Sydia</span>
+            <span class="status-badge" id="statusBadge">IDLE</span>
         </div>
-        <div>Time: <span id="clock">--:--:--</span></div>
-    </div>
-    
-    <div id="main-container">
-        <!-- 左侧 -->
-        <div id="left-panel">
-            <div class="chat-box" id="chat-history"></div>
-            <div id="ask-ai-bar">
-                <input type="text" id="ask-input" placeholder="Ask AI / Upload File..." />
-                <button id="ask-btn">Send</button>
+        <div class="topbar-center" id="currentUrl">—</div>
+        <div class="topbar-right">
+            <span class="time" id="clock"></span>
+        </div>
+    </header>
+
+    <!-- ═══ 三栏主体 ═══ -->
+    <main id="layout">
+
+        <!-- ── 左栏: Ask AI (中间人脑聊天) ── -->
+        <aside id="chatPanel">
+            <div class="panel-header">Ask AI</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="msg assistant">你好，我是 Sydia 中间人助手。你可以告诉我你想让 Agent 做什么，或者询问当前状态。</div>
             </div>
-        </div>
-        
-        <!-- 中间 -->
-        <div id="center-panel">
-            <img id="viewer-img" src="" alt="Web Viewer (Wait for first screenshot...)" />
-        </div>
-        
-        <!-- 右侧 -->
-        <div id="right-panel">
-            <button onclick="document.getElementById('blur-modal').style.display='flex'" style="margin-bottom: 10px; padding: 10px; background: var(--primary); color: var(--onPrimary); border:none; border-radius: 6px; cursor: pointer; font-weight: bold;">+ 新增任务 (Click)</button>
-            <div id="task-pool">
-                <!-- 任务列表在此渲染 -->
+            <form id="chatForm" class="chat-input-area" autocomplete="off">
+                <input type="text" id="chatInput" placeholder="输入指令或提问..." />
+                <button type="submit" id="chatSend">↑</button>
+            </form>
+        </aside>
+
+        <!-- ── 中栏: 浏览器预览 + Workflow 日志 ── -->
+        <section id="viewerPanel">
+            <div class="panel-header">
+                Screen Viewer
+                <button class="btn-icon" id="refreshScreenshot" title="刷新截图">⟳</button>
+            </div>
+            <div class="viewer-screen" id="viewerScreen">
+                <img id="screenshotImg" alt="Browser Screenshot" />
+                <div class="viewer-placeholder" id="viewerPlaceholder">等待浏览器截图...</div>
+            </div>
+            <div class="panel-header" style="margin-top:4px;">Workflow Log</div>
+            <div class="log-area" id="logArea"></div>
+        </section>
+
+        <!-- ── 右栏: Task Pool ── -->
+        <aside id="taskPanel">
+            <div class="panel-header">
+                Task Pool
+                <button class="btn-icon" id="addTaskBtn" title="添加任务">＋</button>
+            </div>
+            <div class="task-list" id="taskList">
+                <div class="task-empty">暂无任务</div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- ═══ 添加任务模态弹窗 (毛玻璃 Blur) ═══ -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-card" id="modalCard">
+            <div class="modal-title">添加新任务</div>
+            <input type="text" id="modalTitle" placeholder="任务标题" />
+            <textarea id="modalDetail" placeholder="任务详细描述 (可选)" rows="4"></textarea>
+            <div class="modal-actions">
+                <button class="btn-secondary" id="modalCancel">取消</button>
+                <button class="btn-primary" id="modalConfirm">确认添加</button>
             </div>
         </div>
     </div>
 
-    <!-- Blur 弹窗 -->
-    <div id="blur-modal">
-        <div class="modal-content">
-            <h3 style="color:var(--primary); margin-top:0;">Type Task / Upload</h3>
-            <textarea id="modal-text" placeholder="描述你的任务..."></textarea>
-            <input type="file" id="modal-file" style="margin-bottom:10px; color:var(--onSurface);" />
-            <div style="display: flex; gap: 10px;">
-                <button id="submit-task-btn" style="flex: 1; background:var(--primary); color:var(--onPrimary); padding:8px; border:none; border-radius:4px; cursor: pointer;">提交</button>
-                <button onclick="document.getElementById('blur-modal').style.display='none'" style="flex: 1; background:var(--surfaceVariant); color:var(--onSurface); padding:8px; border:none; border-radius:4px; cursor: pointer;">取消</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
+    <script src="/app.js"></script>
 </body>
 </html>

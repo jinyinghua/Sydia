@@ -1,43 +1,70 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from app.state import state
-from app.llm import llm_call_with_tools
+"""
+Sydia - 中间人脑 (Middleman Agent / Ask AI)
+对应手稿图2: 一个完整的支持 MCP 的 LLM 聊天模块
+它是人类与系统之间的桥梁, 可以:
+  - 回答关于系统状态的问题
+  - 通过工具 add_task / edit_task 操控任务池
+  - 通过工具 send_email 像真人一样发邮件
+  - 流式输出 (stream)
+"""
 import json
+import os
+from openai import AsyncOpenAI
 
-middleman_router = APIRouter()
+from app.state import agent_state
+from app.email_service import send_email
 
+client = AsyncOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY", ""),
+    base_url=os.getenv("OPENAI_BASE_URL", None),
+)
+MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
-class ChatRequest(BaseModel):
-    message: str
-    file_content: str = None
-
+# ── 中间人专属工具定义 (与执行脑的工具不同) ──
 
 MIDDLEMAN_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "add_task_to_pool",
-            "description": "向任务池(Task Pool)中添加一个新任务",
+            "name": "add_task",
+            "description": "向任务池中添加一个新任务, 当用户想让 Agent 做某件事时调用",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task": {"type": "string", "description": "任务描述"}
+                    "title": {"type": "string", "description": "任务标题 (简短)"},
+                    "detail": {"type": "string", "description": "任务详细描述"},
                 },
-                "required": ["task"],
+                "required": ["title", "detail"],
             },
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "edit_current_task",
-            "description": "修改当前正在执行的任务",
+            "name": "edit_task",
+            "description": "修改任务池中已有任务的内容",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "new_task": {"type": "string", "description": "新的任务描述"}
+                    "task_id": {"type": "string", "description": "要修改的任务 ID"},
+                    "title": {"type": "string", "description": "新的任务标题"},
+                    "detail": {"type": "string", "description": "新的任务详情"},
                 },
-                "required": ["new_task"],
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_task",
+            "description": "从任务池中删除一个任务",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "要删除的任务 ID"},
+                },
+                "required": ["task_id"],
             },
         },
     },
@@ -45,86 +72,205 @@ MIDDLEMAN_TOOLS = [
         "type": "function",
         "function": {
             "name": "send_email",
-            "description": "给人类发送邮件通知",
+            "description": "像真人一样发送电子邮件 (回复/汇报/问候等)",
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "to": {"type": "string", "description": "收件人邮箱"},
                     "subject": {"type": "string", "description": "邮件主题"},
-                    "body": {"type": "string", "description": "邮件正文"},
+                    "content": {"type": "string", "description": "邮件正文"},
                 },
-                "required": ["subject", "body"],
+                "required": ["to", "subject", "content"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_status",
+            "description": "获取当前系统的实时状态 (执行脑状态/任务池/最近日志)",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
 ]
 
+# ── 中间人工具执行器 ──
 
-@middleman_router.post("/chat")
-async def ask_ai_middleman(req: ChatRequest):
-    """人类与中间人对话，中间人通过工具管理任务池"""
-    context = (
-        f"当前任务池: {state.task_queue}\n"
-        f"执行脑状态: {state.status}\n"
-        f"当前任务: {state.current_task}"
+async def run_middleman_tool(name: str, args: dict) -> str:
+    if name == "add_task":
+        task = await agent_state.add_task(args["title"], args.get("detail", ""))
+        return f"✅ 任务已添加 (ID: {task.id}): {task.title}"
+
+    elif name == "edit_task":
+        task = await agent_state.edit_task(
+            args["task_id"],
+            args.get("title", ""),
+            args.get("detail", ""),
+        )
+        if task:
+            return f"✅ 任务 {task.id} 已修改: {task.title}"
+        return "❌ 未找到该任务 ID"
+
+    elif name == "delete_task":
+        ok = await agent_state.delete_task(args["task_id"])
+        return "✅ 任务已删除" if ok else "❌ 未找到该任务 ID"
+
+    elif name == "send_email":
+        success = await send_email(args["to"], args["subject"], args["content"])
+        return "✅ 邮件已发送" if success else "❌ 邮件发送失败 (请检查邮箱配置)"
+
+    elif name == "get_system_status":
+        pool = agent_state.get_pool_summary()
+        logs = agent_state.workflow_logs[-10:]
+        return json.dumps({
+            "execution_status": agent_state.execution_status,
+            "current_url": agent_state.current_url,
+            "task_pool": pool,
+            "recent_logs": [l["msg"] for l in logs],
+        }, ensure_ascii=False, indent=2)
+
+    return f"未知工具: {name}"
+
+
+# ── 构建 System Prompt ──
+
+def build_system_prompt() -> str:
+    pool = agent_state.get_pool_summary()
+    return f"""你是 Sydia 的中间人助手。你是用户与自动化系统之间的桥梁。
+
+## 你的身份
+- 你负责接待用户, 理解他们的需求
+- 你可以通过工具向任务池添加/修改/删除任务
+- 你可以通过工具发送电子邮件
+- 你可以查询系统状态
+
+## 当前系统状态
+- 执行脑状态: {agent_state.execution_status}
+- 当前操作 URL: {agent_state.current_url or '无'}
+- 任务池: {json.dumps(pool, ensure_ascii=False) if pool else '空'}
+
+## 重要规则
+- 当用户想让系统做某件事时, 使用 add_task 工具添加任务
+- 当用户想修改或取消任务时, 使用 edit_task 或 delete_task
+- 用户如果只是聊天/问问题, 直接回复即可, 不需要调用工具
+- 回复保持简洁友好, 使用中文
+"""
+
+
+# ── 对外接口: 流式聊天 ──
+
+async def chat_stream(user_message: str):
+    """
+    流式处理用户消息, yield 每个文本片段
+    如果 LLM 调用了工具, 会先执行工具再继续生成
+    """
+    # 维护对话历史
+    agent_state.chat_history.append({"role": "user", "content": user_message})
+
+    # 构建消息
+    messages = [{"role": "system", "content": build_system_prompt()}]
+    # 只保留最近 20 轮
+    messages.extend(agent_state.chat_history[-40:])
+
+    # 第一次调用: 可能触发工具
+    response = await client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        tools=MIDDLEMAN_TOOLS,
+        temperature=0.7,
+        max_tokens=2048,
+        stream=False,  # 工具判断阶段先不流式
     )
 
-    # 构建包含历史的 messages 列表
-    messages = build_messages_with_history(context, req.message, req.file_content)
+    msg = response.choices[0].message
 
-    response_msg, tool_calls = await llm_call_with_tools(messages, tools=MIDDLEMAN_TOOLS)
+    # 如果触发了工具调用
+    if msg.tool_calls:
+        # 执行所有工具
+        tool_results = []
+        tool_messages = []
+        for tc in msg.tool_calls:
+            fn_name = tc.function.name
+            try:
+                fn_args = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                fn_args = {}
 
-    # ---- 工具调用分发（支持多工具） ----
-    results = []
-    if tool_calls:
-        for tool in tool_calls:
-            # 修复：httpx 返回的是 dict，使用 [] 访问
-            name = tool["function"]["name"]
-            args = json.loads(tool["function"]["arguments"])
+            result = await run_middleman_tool(fn_name, fn_args)
+            tool_results.append(f"[{fn_name}]: {result}")
 
-            if name == "add_task_to_pool":
-                state.add_task(args["task"])
-                state.add_history(f"AI: 已添加任务 → {args['task']}")
-                results.append(f"已将任务加入队列: {args['task']}")
+            tool_messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result,
+            })
 
-            elif name == "edit_current_task":
-                state.set_current(args["new_task"])
-                state.add_history(f"AI: 已修改当前任务 → {args['new_task']}")
-                results.append(f"已修改当前任务为: {args['new_task']}")
+        # 把工具结果反馈给 LLM, 让它生成最终回复 (流式)
+        follow_messages = messages + [
+            {
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in msg.tool_calls
+                ],
+            },
+            *tool_messages,
+        ]
 
-            elif name == "send_email":
-                state.add_history(f"AI: 已发送邮件 → {args['subject']}")
-                results.append(f"邮件已发送: {args['subject']}")
+        stream = await client.chat.completions.create(
+            model=MODEL,
+            messages=follow_messages,
+            temperature=0.7,
+            max_tokens=2048,
+            stream=True,
+        )
 
-        combined_reply = "\n".join(results)
-        return {"reply": combined_reply, "raw": response_msg}
+        full_reply = ""
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                full_reply += delta
+                yield delta
 
-    # ---- 普通对话 ----
-    state.add_history(f"User: {req.message}")
-    state.add_history(f"AI: {response_msg}")
-    return {"reply": response_msg, "raw": response_msg}
+        agent_state.chat_history.append({"role": "assistant", "content": full_reply})
+
+    else:
+        # 没有工具调用, 直接流式输出
+        stream = await client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2048,
+            stream=True,
+        )
+
+        full_reply = ""
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                full_reply += delta
+                yield delta
+
+        agent_state.chat_history.append({"role": "assistant", "content": full_reply})
 
 
-def build_messages_with_history(context: str, user_message: str, file_content: str = None):
-    """构建包含对话历史的 messages 列表，支持多轮对话"""
-    system_prompt = (
-        "你是中间人(Middleman)。职责：与人类沟通，使用工具管理任务池或发邮件。\n"
-        f"当前系统背景:\n{context}"
-    )
+# ── 对外接口: 处理收到的邮件 ──
 
-    messages = [{"role": "system", "content": system_prompt}]
+async def process_incoming_email(subject: str, body: str, sender: str):
+    """将收到的邮件当作用户消息, 交给中间人处理"""
+    prompt = f"你收到了一封来自 {sender} 的邮件。\n主题: {subject}\n内容:\n{body}\n\n请理解邮件意图并执行相应操作 (如添加任务等), 然后以邮件回复的口吻生成回复内容。"
 
-    # 从 state.history 中提取最近的对话记录作为上下文
-    recent_history = state.history[-20:]  # 最近 20 条
-    for entry in recent_history:
-        if entry.startswith("User: "):
-            messages.append({"role": "user", "content": entry[6:]})
-        elif entry.startswith("AI: "):
-            messages.append({"role": "assistant", "content": entry[4:]})
+    full_reply = ""
+    async for chunk in chat_stream(prompt):
+        full_reply += chunk
 
-    # 当前用户消息
-    content = user_message
-    if file_content:
-        content += f"\n\n附带文件内容:\n{file_content}"
-    messages.append({"role": "user", "content": content})
+    # 自动回复邮件
+    if full_reply and sender:
+        await send_email(sender, f"Re: {subject}", full_reply)
 
-    return messages
+    return full_reply
