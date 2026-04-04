@@ -1,75 +1,51 @@
 # Sydia
 
-一个 24/7 运行的"双脑"AI Agent 系统。
+一个 24/7 运行的 "双脑" AI Agent 系统，具备基于 RAG 的长期记忆能力。
 
-## 架构
+## 🧠 核心架构
 
-- **执行脑 (Execution Agent)**: 后台常驻，通过 Playwright 浏览器自动执行 Web 任务
-- **中间人脑 (Middleman Agent)**: 对外接待用户，支持 MCP 工具调用，可动态管理任务池
-- **双向邮件通信**: 通过 SMTP/IMAP 像真人一样收发邮件
+- **执行脑 (Execution Agent)**: 后台常驻循环，通过 Playwright 浏览器执行任务。每次决策前会自动检索相关记忆。
+- **中间人脑 (Middleman Agent)**: 对外窗口，通过 API 或邮件与人类沟通。支持 MCP 工具调用，可手动或自动存储重要记忆。
+- **长期记忆 (Memory / RAG)**: 采用 **Gemini Embedding** + **Pinecone**。任务的开始、过程、结论会自动向量化并持久化，实现跨会话的经验积累。
 
-## 路由
+## 🔍 RAG 工作流
 
-| 路径 | 用途 |
-|------|------|
-| `/` | Web 控制台界面 |
-| `/v1/chat` | 与中间人脑对话 (SSE 流式) |
-| `/v1/state` | 系统状态 |
-| `/v1/screenshot` | 浏览器截图 |
-| `/v1/tasks` | 任务池 CRUD |
-| `/v1/tools` | 工具注册/管理 (MCP) |
-| `/v1/logs` | Workflow 日志 |
+1. **感官输入**: 接收用户指令或观察浏览器截图。
+2. **检索 (Retrieve)**: 调用 Gemini `text-embedding-004` 将当前上下文转为 768 维向量，在 Pinecone 中进行余弦相似度搜索。
+3. **增强 (Augment)**: 将搜到的历史经验（如：用户偏好、特定网站的操作技巧、上次失败的原因）注入 System Prompt。
+4. **生成 (Generate)**: LLM 根据增强后的上下文做出最优决策。
+5. **存储 (Store)**: 任务结束后的经验教训自动写回 Pinecone，形成闭环。
 
-## 环境变量
+## ⚙️ 环境变量配置
 
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| `OPENAI_API_KEY` | ✅ | OpenAI API 密钥 |
-| `OPENAI_BASE_URL` | ❌ | 自定义 API 地址 (兼容第三方) |
-| `LLM_MODEL` | ❌ | 模型名称 (默认 `gpt-4o`) |
-| `EMAIL_ACCOUNT` | ❌ | Agent 邮箱账号 (163/QQ) |
-| `EMAIL_PASSWORD` | ❌ | 邮箱授权码 |
-| `SMTP_HOST` | ❌ | SMTP 服务器 (默认 `smtp.qq.com`) |
-| `SMTP_PORT` | ❌ | SMTP 端口 (默认 `465`) |
-| `IMAP_HOST` | ❌ | IMAP 服务器 (默认 `imap.qq.com`) |
-| `IMAP_PORT` | ❌ | IMAP 端口 (默认 `993`) |
-| `TRUSTED_SENDER` | ❌ | 信任的发件人邮箱 |
+请在部署环境（如 Zeabur, Docker, 或 .env）中配置以下变量：
 
-## 构建与部署
+| 类别 | 变量名 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| **基础** | `OPENAI_API_KEY` | ✅ | 用于两个 LLM 大脑决策 |
+| | `LLM_MODEL` | ❌ | 默认 `gpt-4o` |
+| **记忆** | `GEMINI_API_KEY` | ✅ | 用于生成 768 维 Embedding |
+| | `PINECONE_API_KEY` | ✅ | Pinecone 向量库密钥 |
+| | `PINECONE_INDEX_HOST` | ✅ | Pinecone Index 的 Host 地址 |
+| **邮件** | `EMAIL_ACCOUNT` | ❌ | Agent 发信账号 (如 QQ/163) |
+| | `EMAIL_PASSWORD` | ❌ | 邮箱授权码 |
+| | `TRUSTED_SENDER` | ❌ | 信任的控制者邮箱 |
 
-### 本地 Docker 构建
+## 🛠️ Pinecone 设置建议
+
+- **Dimensions**: `768`
+- **Metric**: `cosine`
+
+## 🚀 快速启动 (Docker)
 
 ```bash
-# 构建镜像
 docker build -t sydia .
 
-# 运行 (替换为你的真实密钥)
-docker run -d \
-  --name sydia \
-  -p 8080:8080 \
+docker run -d --name sydia -p 8080:8080 \
   -e OPENAI_API_KEY="sk-xxx" \
-  -e EMAIL_ACCOUNT="your@qq.com" \
-  -e EMAIL_PASSWORD="授权码" \
-  -e SMTP_HOST="smtp.qq.com" \
-  -e SMTP_PORT="465" \
-  -e IMAP_HOST="imap.qq.com" \
-  -e IMAP_PORT="993" \
-  -e TRUSTED_SENDER="boss@example.com" \
+  -e GEMINI_API_KEY="AIza-xxx" \
+  -e PINECONE_API_KEY="pc-xxx" \
+  -e PINECONE_INDEX_HOST="https://your-index.pinecone.io" \
   sydia
-
-# 访问 http://localhost:8080
 ```
-
-### 云端部署 (Zeabur / ClawCloud Run)
-
-1. 将代码推送到 GitHub
-2. 在平台上绑定仓库，平台会自动识别 Dockerfile
-3. 在平台控制台中添加上述环境变量
-4. 部署完成后通过分配的域名访问
-
-### 邮箱配置参考
-
-| 邮箱 | SMTP Host | SMTP Port | IMAP Host | IMAP Port |
-|------|-----------|-----------|-----------|-----------|
-| QQ邮箱 | smtp.qq.com | 465 | imap.qq.com | 993 |
-| 163邮箱 | smtp.163.com | 465 | imap.163.com | 993 |
+访问 `http://localhost:8080` 进入控制台。
